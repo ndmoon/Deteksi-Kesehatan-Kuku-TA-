@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>TensorFlow.js Model Evaluation</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; margin: 20px; }
+    .container { max-width: 600px; margin: auto; }
+    img { display: block; max-width: 100%; height: auto; margin-top: 15px; border: 1px solid #ddd; padding: 5px; }
+    #predictionResult { margin-top: 15px; font-weight: bold; }
+    #loading { color: gray; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h1>TensorFlow.js Model Evaluation</h1>
+
+    <p>Upload an image to get a prediction from the model.</p>
+
+    <input type="file" id="fileInput" accept="image/*">
+    <img id="preview" src="#" alt="Image preview" style="display:none;">
+
+    <p id="predictionResult"></p>
+    <p id="loading" style="display:none;">Loading model...</p>
+
+</div>
+
+<script>
+    let model;
+    // Corrected path based on user feedback
+    const modelPath = '/../public/model/'; // Assuming the model folder is within the public directory
+
+    async function loadModel() {
+        const loadingElement = document.getElementById('loading');
+        loadingElement.style.display = 'block';
+        try {
+            // Load the model using the corrected path
+            model = await tf.loadLayersModel(modelPath + 'model.json');
+            console.log('Model loaded successfully');
+            loadingElement.style.display = 'none';
+            document.getElementById('predictionResult').innerText = 'Model loaded. Upload an image to test.';
+        } catch (error) {
+            console.error('Error loading the model:', error);
+            loadingElement.style.display = 'none';
+            document.getElementById('predictionResult').innerText = 'Error loading model. Check console for details.';
+        }
+    }
+
+    function preprocessImage(imageElement) {
+        return tf.tidy(() => {
+            const tensor = tf.browser.fromPixels(imageElement)
+                .resizeNearestNeighbor([128, 128]) // Adjust size to your model's input shape
+                .toFloat()
+                .div(tf.scalar(255.0)) // Normalize pixel values
+                .expandDims(); // Add batch dimension
+            return tensor;
+        });
+    }
+
+    async function predictImage(imageElement) {
+        if (!model) {
+            document.getElementById('predictionResult').innerText = "Model not loaded yet. Please wait.";
+            return;
+        }
+
+        document.getElementById('predictionResult').innerText = 'Making prediction...';
+        const preprocessedImage = preprocessImage(imageElement);
+        const predictions = model.predict(preprocessedImage);
+
+        const classNames = ['Clubbing', 'Garis_Gelap', 'Kuku_Membiru', 'Kuku_Putih', 'Kuku_Sehat', 'Onychogryphosis', 'Pitting']; // Update with your class names
+        const values = predictions.dataSync();
+        const predictedClassIndex = predictions.argMax(1).dataSync()[0];
+        const predictedClassName = classNames[predictedClassIndex];
+        const confidence = values[predictedClassIndex] * 100;
+
+
+        document.getElementById('predictionResult').innerText = `Predicted class: ${predictedClassName} (${confidence.toFixed(2)}%)`;
+
+        preprocessedImage.dispose(); // Clean up the tensor
+        predictions.dispose(); // Clean up the tensor
+    }
+
+    document.getElementById('fileInput').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.getElementById('preview');
+                img.src = e.target.result;
+                img.style.display = 'block';
+                img.onload = () => {
+                    predictImage(img);
+                }
+            }
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Load the model when the page loads
+    window.onload = loadModel;
+
+</script>
+
+</body>
+</html>
